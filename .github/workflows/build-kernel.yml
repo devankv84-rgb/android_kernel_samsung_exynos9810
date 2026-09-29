@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout Kernel Source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: lineage-20
 
@@ -45,7 +45,7 @@ jobs:
       - name: Apply TP-Link UB500 Driver Patch
         run: |
           # Patch drivers/bluetooth/btusb.c to add UB500 (RTL8761BU ID 2357:0604)
-          sed -i '/USB_DEVICE(0x0bda, 0xc822)/a \thttps://github.com/mylesgoose/android_kernel_samsung_exynos9810.git/* TP-Link UB500 / Realtek RTL8761BU */\n\t{ USB_DEVICE(0x2357, 0x0604), .driver_info = BTUSB_REALTEK },' drivers/bluetooth/btusb.c || true
+          sed -i '/USB_DEVICE(0x0bda, 0xc822)/a \t/* TP-Link UB500 / Realtek RTL8761BU */\n\t{ USB_DEVICE(0x2357, 0x0604), .driver_info = BTUSB_REALTEK },' drivers/bluetooth/btusb.c || true
 
           # Append USB and Bluetooth kernel config flags to star2lte defconfig
           echo "CONFIG_BT_HCIBTUSB=m" >> arch/arm64/configs/exynos9810-star2lte_defconfig
@@ -84,7 +84,8 @@ jobs:
           zip -r9 ../S9p-NetHunter-UB500-Kernel.zip * -x .git README.md *placeholder
 
       - name: Upload Flashable Kernel Zip
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: S9p-NetHunter-UB500-Kernel
           path: S9p-NetHunter-UB500-Kernel.zip
+          
