@@ -1,10 +1,10 @@
 name: Build S9+ NetHunter Kernel (UB500 Supported)
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
   push:
     branches:
-      - lineage-20 # Runs on pushes to lineage-20 branch
+      - lineage-20
 
 jobs:
   build:
@@ -33,7 +33,8 @@ jobs:
             unzip \
             cpio \
             python2 \
-            python3
+            python3 \
+            libssl-dev
 
       - name: Set up AArch64 Toolchain
         run: |
@@ -44,8 +45,12 @@ jobs:
 
       - name: Apply TP-Link UB500 Driver Patch
         run: |
-          # Patch drivers/bluetooth/btusb.c to add UB500 (RTL8761BU ID 2357:0604)
-          sed -i '/USB_DEVICE(0x0bda, 0xc822)/a \t/* TP-Link UB500 / Realtek RTL8761BU */\n\t{ USB_DEVICE(0x2357, 0x0604), .driver_info = BTUSB_REALTEK },' drivers/bluetooth/btusb.c || true
+          # Patch drivers/bluetooth/btusb.c safely
+          if grep -q "0x2357, 0x0604" drivers/bluetooth/btusb.c; then
+            echo "UB500 already present in btusb.c"
+          else
+            sed -i '/USB_DEVICE(0x0bda, 0xc822)/a \t/* TP-Link UB500 / Realtek RTL8761BU */\n\t{ USB_DEVICE(0x2357, 0x0604), .driver_info = BTUSB_REALTEK },' drivers/bluetooth/btusb.c
+          fi
 
           # Append USB and Bluetooth kernel config flags to star2lte defconfig
           echo "CONFIG_BT_HCIBTUSB=m" >> arch/arm64/configs/exynos9810-star2lte_defconfig
@@ -61,22 +66,25 @@ jobs:
           export PATH="$HOME/toolchains/gcc64/bin:$HOME/toolchains/gcc32/bin:$PATH"
           export CROSS_COMPILE=aarch64-linux-android-
           export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+          export PYTHON=python2
 
           make O=out exynos9810-star2lte_defconfig
-          make -j$(nproc --all) O=out
+          
+          # Run parallel make first; if it fails, run -j1 to print the exact broken line/file
+          make -j$(nproc --all) O=out KCFLAGS="-w" || make -j1 O=out KCFLAGS="-w"
 
       - name: Package with AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           
-          # Copy compiled kernel image to AnyKernel3 directory
           if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
             cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           elif [ -f out/arch/arm64/boot/Image.gz ]; then
             cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          elif [ -f out/arch/arm64/boot/Image ]; then
+            cp out/arch/arm64/boot/Image AnyKernel3/
           fi
 
-          # Adjust AnyKernel3 flash flags for Samsung S9+ (star2lte)
           cd AnyKernel3
           sed -i 's/device.name1=.*/device.name1=star2lte/g' anykernel.sh
           sed -i 's/device.name2=.*/device.name2=star2ltexx/g' anykernel.sh
